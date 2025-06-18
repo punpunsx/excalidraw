@@ -13,7 +13,7 @@ import type {
 
 import type { NonDeletedExcalidrawElement } from "@excalidraw/element/types";
 
-import { updateBoundElements } from "./binding";
+import { bindOrUnbindLinearElement, updateBoundElements } from "./binding";
 import { getCommonBounds } from "./bounds";
 import { getPerfectElementSize } from "./sizeHelpers";
 import { getBoundTextElement } from "./textElement";
@@ -102,6 +102,10 @@ export const dragSelectedElements = (
     gridSize,
   );
 
+  const elementsToUpdateIds = new Set(
+    Array.from(elementsToUpdate, (el) => el.id),
+  );
+
   elementsToUpdate.forEach((element) => {
     updateElementCoords(pointerDownState, element, scene, adjustedOffset);
     if (!isArrowElement(element)) {
@@ -118,9 +122,34 @@ export const dragSelectedElements = (
           adjustedOffset,
         );
       }
+
       updateBoundElements(element, scene, {
         simultaneouslyUpdated: Array.from(elementsToUpdate),
       });
+    } else {
+      const isStartBoundElementSelected = element.startBinding
+        ? elementsToUpdateIds.has(element.startBinding.elementId)
+        : false;
+      const isEndBoundElementSelected = element.endBinding
+        ? elementsToUpdateIds.has(element.endBinding.elementId)
+        : false;
+
+      const shouldUnbindStart =
+        element.startBinding && !isStartBoundElementSelected;
+      const shouldUnbindEnd = element.endBinding && !isEndBoundElementSelected;
+
+      if (shouldUnbindStart || shouldUnbindEnd) {
+        // NOTE: Moving the bound arrow should unbind it, otherwise we would
+        // have weird situations, like 0 lenght arrow when the user moves
+        // the arrow outside a filled shape suddenly forcing the arrow start
+        // and end point to jump "outside" the shape.
+        bindOrUnbindLinearElement(
+          element,
+          shouldUnbindStart ? null : "keep",
+          shouldUnbindEnd ? null : "keep",
+          scene,
+        );
+      }
     }
   });
 };
