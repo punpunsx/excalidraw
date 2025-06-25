@@ -411,6 +411,7 @@ export class LinearElementEditor {
             event[KEYS.CTRL_OR_CMD] ? null : app.getEffectiveGridSize(),
             elements,
             app.state.zoom,
+            app.state.bindMode,
           ),
         );
       }
@@ -2030,6 +2031,7 @@ const pointDraggingUpdates = (
   gridSize: NullableGridSize,
   elements: readonly Ordered<NonDeletedExcalidrawElement>[],
   zoom: AppState["zoom"],
+  bindMode: AppState["bindMode"],
 ): PointsPositionUpdates => {
   const hasMidPoints =
     selectedPointsIndices.filter(
@@ -2105,7 +2107,8 @@ const pointDraggingUpdates = (
           !(
             hoveredElement?.id === otherHoveredElement?.id &&
             hoveredElement != null
-          )
+          ) &&
+          bindMode === "focus"
         ) {
           newGlobalPointPosition = getOutlineAvoidingPoint(
             element,
