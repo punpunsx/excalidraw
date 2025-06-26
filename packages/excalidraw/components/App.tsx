@@ -235,7 +235,6 @@ import {
   isLineElement,
   isSimpleArrow,
   getOutlineAvoidingPoint,
-  bindOrUnbindLinearElement,
 } from "@excalidraw/element";
 
 import type { GlobalPoint, LocalPoint, Radians } from "@excalidraw/math";
@@ -4398,14 +4397,6 @@ class App extends React.Component<AppProps, AppState> {
             { informMutation: false, isDragging: false },
           );
 
-          if (isSimpleArrow(element)) {
-            // NOTE: Moving the bound arrow should unbind it, otherwise we would
-            // have weird situations, like 0 lenght arrow when the user moves
-            // the arrow outside a filled shape suddenly forcing the arrow start
-            // and end point to jump "outside" the shape.
-            bindOrUnbindLinearElement(element, null, null, this.scene);
-          }
-
           updateBoundElements(element, this.scene, {
             simultaneouslyUpdated: selectedElements,
           });
@@ -6000,6 +5991,7 @@ class App extends React.Component<AppProps, AppState> {
         );
 
         const avoidancePoint =
+          multiElement &&
           hoveredElement &&
           getOutlineAvoidingPoint(
             multiElement,
@@ -8340,6 +8332,7 @@ class App extends React.Component<AppProps, AppState> {
         if (this.state.bindMode === "focus") {
           const pointerMovementDistance = Math.hypot(
             (this.lastPointerMoveCoords?.x ?? Infinity) - pointerCoords.x,
+            (this.lastPointerMoveCoords?.y ?? Infinity) - pointerCoords.y,
           );
           if (this.bindModeHandler && pointerMovementDistance < 1) {
             clearTimeout(this.bindModeHandler);
