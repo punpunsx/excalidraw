@@ -26,7 +26,6 @@ import {
 import {
   deconstructLinearOrFreeDrawElement,
   isPathALoop,
-  shouldTestInside,
   type Store,
 } from "@excalidraw/element";
 
@@ -71,9 +70,9 @@ import { ShapeCache, toggleLinePolygonState } from "./shape";
 import { getLockedLinearCursorAlignSize } from "./sizeHelpers";
 
 import { isLineElement } from "./typeChecks";
+import { moveAllRight } from "./zindex";
 
 import type { Scene } from "./Scene";
-import { moveAllRight } from "./zindex";
 
 import type { Bounds } from "./bounds";
 import type {
@@ -481,7 +480,7 @@ export class LinearElementEditor {
       if (isArrowElement(element)) {
         const updatedElements = moveAllRight(
           app.scene.getElementsIncludingDeleted(),
-          app.state
+          app.state,
         );
         app.scene.replaceAllElements(updatedElements);
       }
@@ -564,19 +563,15 @@ export class LinearElementEditor {
           const bindingElement = isBindingEnabled(appState)
             ? getHoveredElementForBinding(
                 (selectedPointsIndices?.length ?? 0) > 1
-                  ? tupleToCoors(
-                      LinearElementEditor.getPointAtIndexGlobalCoordinates(
-                        element,
-                        selectedPoint!,
-                        elementsMap,
-                      ),
+                  ? LinearElementEditor.getPointAtIndexGlobalCoordinates(
+                      element,
+                      selectedPoint!,
+                      elementsMap,
                     )
-                  : pointerCoords,
+                  : pointFrom<GlobalPoint>(pointerCoords.x, pointerCoords.y),
                 elements,
                 elementsMap,
                 appState.zoom,
-                isElbowArrow(element),
-                isElbowArrow(element),
               )
             : null;
 
@@ -927,11 +922,10 @@ export class LinearElementEditor {
         selectedPointsIndices: [element.points.length - 1],
         lastUncommittedPoint: null,
         endBindingElement: getHoveredElementForBinding(
-          scenePointer,
+          pointFrom<GlobalPoint>(scenePointer.x, scenePointer.y),
           elements,
           elementsMap,
           app.state.zoom,
-          linearElementEditor.elbowed,
         ),
       };
 
@@ -970,6 +964,7 @@ export class LinearElementEditor {
           startBindingElement,
           endBindingElement,
           scene,
+          app.state.zoom,
         );
       }
     }
@@ -2063,15 +2058,10 @@ const pointDraggingUpdates = (
           element.angle,
         );
         const hoveredElement = getHoveredElementForBinding(
-          {
-            x: newGlobalPointPosition[0],
-            y: newGlobalPointPosition[1],
-          },
+          newGlobalPointPosition,
           elements,
           elementsMap,
           appState.zoom,
-          shouldTestInside(element),
-          isElbowArrow(element),
         );
 
         const otherGlobalPoint =
@@ -2081,34 +2071,33 @@ const pointDraggingUpdates = (
             elementsMap,
           );
         const otherHoveredElement = getHoveredElementForBinding(
-          {
-            x: otherGlobalPoint[0],
-            y: otherGlobalPoint[1],
-          },
+          otherGlobalPoint,
           elements,
           elementsMap,
           appState.zoom,
-          shouldTestInside(element),
-          isElbowArrow(element),
         );
 
-        // Allow binding inside the element if both ends are inside
+        const binding =
+          element[pointIndex === 0 ? "startBinding" : "endBinding"];
         if (
+          isBindingEnabled(appState) &&
           isArrowElement(element) &&
-          !(
-            hoveredElement?.id === otherHoveredElement?.id &&
-            hoveredElement != null
-          ) &&
-          appState.bindMode === "focus" &&
-          isBindingEnabled(appState)
+          hoveredElement &&
+          appState.bindMode === "focus"
         ) {
-          newGlobalPointPosition = getOutlineAvoidingPoint(
-            element,
-            hoveredElement,
-            newGlobalPointPosition,
-            pointIndex,
-            elementsMap,
-          );
+          if (
+            isFixedPointBinding(binding)
+              ? hoveredElement.id !== binding.elementId
+              : hoveredElement.id !== otherHoveredElement?.id
+          ) {
+            newGlobalPointPosition = getOutlineAvoidingPoint(
+              element,
+              hoveredElement,
+              newGlobalPointPosition,
+              pointIndex,
+              elementsMap,
+            );
+          }
         }
 
         newPointPosition = LinearElementEditor.createPointAt(
