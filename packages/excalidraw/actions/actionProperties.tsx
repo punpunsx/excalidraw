@@ -1720,9 +1720,9 @@ export const actionChangeArrowType = register({
             bindLinearElement(
               newElement,
               startElement,
+              appState.bindMode === "fixed" ? "inside" : "orbit",
               "start",
               app.scene,
-              app.state.zoom,
             );
           }
         }
@@ -1734,9 +1734,9 @@ export const actionChangeArrowType = register({
             bindLinearElement(
               newElement,
               endElement,
+              appState.bindMode === "fixed" ? "inside" : "orbit",
               "end",
               app.scene,
-              app.state.zoom,
             );
           }
         }
