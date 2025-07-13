@@ -1,14 +1,9 @@
 import { pointFrom } from "@excalidraw/math";
 
+import { bindOrUnbindBindingElement } from "@excalidraw/element/binding";
 import {
-  bindOrUnbindLinearElement,
-  isBindingEnabled,
   getHoveredElementForBinding,
-  bindLinearElement,
-  unbindLinearElement,
-} from "@excalidraw/element/binding";
-import {
-  hitElementItself,
+  isArrowElement,
   isValidPolygon,
   LinearElementEditor,
 } from "@excalidraw/element";
@@ -23,7 +18,7 @@ import {
 import {
   KEYS,
   arrayToMap,
-  tupleToCoors,
+  invariant,
   updateActiveTool,
 } from "@excalidraw/common";
 import { isPathALoop } from "@excalidraw/element";
@@ -34,7 +29,7 @@ import { CaptureUpdateAction } from "@excalidraw/element";
 
 import type { GlobalPoint, LocalPoint } from "@excalidraw/math";
 import type {
-  BindMode,
+  ExcalidrawArrowElement,
   ExcalidrawElement,
   ExcalidrawLinearElement,
   NonDeleted,
@@ -63,6 +58,28 @@ export const actionFinalize = register({
     const elementsMap = scene.getNonDeletedElementsMap();
 
     if (event && appState.selectedLinearElement) {
+      const element = LinearElementEditor.getElement<ExcalidrawArrowElement>(
+        appState.selectedLinearElement.elementId,
+        elementsMap,
+      );
+
+      invariant(
+        element,
+        "Arrow element should exist if selectedLinearElement is set",
+      );
+
+      const draggedPoints =
+        appState.selectedLinearElement.selectedPointsIndices?.reduce(
+          (map, index) => {
+            map.set(index, {
+              point: element.points[index],
+              draggedPoints: true,
+            });
+
+            return map;
+          },
+          new Map(),
+        ) ?? new Map();
       const linearElementEditor = LinearElementEditor.handlePointerUp(
         event,
         appState.selectedLinearElement,
@@ -70,26 +87,7 @@ export const actionFinalize = register({
         app.scene,
       );
 
-      const { startBindingElement, endBindingElement } = linearElementEditor;
-      const element = app.scene.getElement(linearElementEditor.elementId);
-      if (isBindingElement(element)) {
-        bindOrUnbindLinearElement(
-          element,
-          startBindingElement === "keep" ? undefined : startBindingElement,
-          startBindingElement === "keep"
-            ? "keep"
-            : appState.bindMode === "fixed"
-            ? "inside"
-            : "orbit",
-          endBindingElement === "keep" ? undefined : endBindingElement,
-          endBindingElement === "keep"
-            ? "keep"
-            : appState.bindMode === "fixed"
-            ? "inside"
-            : "orbit",
-          app.scene,
-        );
-      }
+      bindOrUnbindBindingElement(element, draggedPoints, scene, appState);
 
       if (linearElementEditor !== appState.selectedLinearElement) {
         // `handlePointerUp()` updated the linear element instance,
@@ -115,37 +113,31 @@ export const actionFinalize = register({
     }
 
     if (appState.editingLinearElement && !appState.newElement) {
-      const { elementId, startBindingElement, endBindingElement } =
-        appState.editingLinearElement;
+      const { elementId } = appState.editingLinearElement;
       const element = LinearElementEditor.getElement(elementId, elementsMap);
 
       if (element) {
-        // NOTE: Dragging the entire arrow doesn't allow binding.
-        const allPointsSelected =
-          appState.editingLinearElement?.pointerDownState
-            .prevSelectedPointsIndices?.length === element.points.length;
+        if (isArrowElement(element)) {
+          const updates =
+            appState.editingLinearElement?.pointerDownState.prevSelectedPointsIndices?.reduce(
+              (updates, index) => {
+                updates.set(index, {
+                  point: element.points[index],
+                  draggedPoints: true,
+                });
 
-        if (
-          !allPointsSelected &&
-          isBindingEnabled(appState) &&
-          isBindingElement(element)
-        ) {
-          bindOrUnbindLinearElement(
-            element,
-            startBindingElement === "keep" ? undefined : startBindingElement,
-            startBindingElement === "keep"
-              ? "keep"
-              : appState.bindMode === "fixed"
-              ? "inside"
-              : "orbit",
-            endBindingElement === "keep" ? undefined : endBindingElement,
-            endBindingElement === "keep"
-              ? "keep"
-              : appState.bindMode === "fixed"
-              ? "inside"
-              : "orbit",
-            scene,
-          );
+                return updates;
+              },
+              new Map(),
+            ) ?? new Map();
+          const allPointsSelected =
+            appState.editingLinearElement?.pointerDownState
+              .prevSelectedPointsIndices?.length === element.points.length;
+
+          // Dragging the entire arrow doesn't allow binding.
+          if (!allPointsSelected) {
+            bindOrUnbindBindingElement(element, updates, scene, appState);
+          }
         }
 
         if (isLineElement(element) && !isValidPolygon(element.points)) {
@@ -258,75 +250,33 @@ export const actionFinalize = register({
           });
         }
 
-        if (
-          isBindingElement(element) &&
-          !isLoop &&
-          element.points.length > 1 &&
-          isBindingEnabled(appState)
-        ) {
-          const coords =
-            sceneCoords ??
-            tupleToCoors(
-              LinearElementEditor.getPointAtIndexGlobalCoordinates(
+        if (isBindingElement(element) && !isLoop && element.points.length > 1) {
+          const coords = sceneCoords
+            ? pointFrom<GlobalPoint>(sceneCoords.x, sceneCoords.y)
+            : LinearElementEditor.getPointAtIndexGlobalCoordinates(
                 element,
                 -1,
                 arrayToMap(elements),
-              ),
-            );
-
-          const hoveredElement = getHoveredElementForBinding(
-            pointFrom<GlobalPoint>(coords.x, coords.y),
-            scene.getNonDeletedElements(),
+              );
+          const point = LinearElementEditor.pointFromAbsoluteCoords(
+            element,
+            coords,
             elementsMap,
-            appState.zoom,
           );
-          if (hoveredElement) {
-            const otherHit = hitElementItself({
-              element: hoveredElement,
-              point: LinearElementEditor.getPointAtIndexGlobalCoordinates(
-                element,
-                0,
-                elementsMap,
-              ),
-              elementsMap,
-              threshold: 0,
-            });
-            const hit = hitElementItself({
-              element: hoveredElement,
-              point: LinearElementEditor.getPointAtIndexGlobalCoordinates(
-                element,
-                -1,
-                elementsMap,
-              ),
-              elementsMap,
-              threshold: 0,
-            });
-            const strategy: BindMode =
-              appState.bindMode === "fixed" ||
-              (hit && element.startBinding?.elementId === hoveredElement.id)
-                ? "inside"
-                : "orbit";
-            bindLinearElement(
-              element,
-              hoveredElement,
-              strategy,
-              "end",
-              scene,
-              strategy === "orbit"
-                ? pointFrom<GlobalPoint>(
-                    hoveredElement.x + hoveredElement.width / 2,
-                    hoveredElement.y + hoveredElement.height / 2,
-                  )
-                : undefined,
-            );
-
-            if (
-              element.startBinding?.elementId === hoveredElement.id &&
-              !otherHit
-            ) {
-              unbindLinearElement(element, "start", scene);
-            }
-          }
+          bindOrUnbindBindingElement(
+            element,
+            new Map([
+              [
+                element.points.length - 1,
+                {
+                  point,
+                  isDragging: false,
+                },
+              ],
+            ]),
+            scene,
+            appState,
+          );
         }
       }
     }
@@ -392,7 +342,7 @@ export const actionFinalize = register({
               ...appState.editingLinearElement,
               pointerDownState: {
                 ...appState.editingLinearElement.pointerDownState,
-                arrowOtherPoint: undefined,
+                arrowOriginalStartPoint: undefined,
               },
             }
           : null,

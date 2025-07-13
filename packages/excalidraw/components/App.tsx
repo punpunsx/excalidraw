@@ -108,15 +108,15 @@ import {
 import {
   getObservedAppState,
   getCommonBounds,
-  maybeSuggestBindingsForLinearElementAtCoords,
+  maybeSuggestBindingsForBindingElementAtCoords,
   getElementAbsoluteCoords,
-  bindOrUnbindLinearElements,
+  bindOrUnbindBindingElements,
   fixBindingsAfterDeletion,
   getHoveredElementForBinding,
   isBindingEnabled,
   shouldEnableBindingForPointerEvent,
   updateBoundElements,
-  getSuggestedBindingsForArrows,
+  getSuggestedBindingsForBindingElements,
   LinearElementEditor,
   newElementWith,
   newFrameElement,
@@ -237,8 +237,8 @@ import {
   isSimpleArrow,
   getOutlineAvoidingPoint,
   calculateFixedPointForNonElbowArrowBinding,
-  bindLinearElement,
   normalizeFixedPoint,
+  bindOrUnbindBindingElement,
 } from "@excalidraw/element";
 
 import type { GlobalPoint, LocalPoint, Radians } from "@excalidraw/math";
@@ -4425,7 +4425,7 @@ class App extends React.Component<AppProps, AppState> {
         });
 
         this.setState({
-          suggestedBindings: getSuggestedBindingsForArrows(
+          suggestedBindings: getSuggestedBindingsForBindingElements(
             selectedElements.filter(
               (element) => element.id !== elbowArrow?.id || step !== 0,
             ),
@@ -4683,12 +4683,10 @@ class App extends React.Component<AppProps, AppState> {
       this.setState({ isBindingEnabled: true });
     }
     if (isArrowKey(event.key)) {
-      bindOrUnbindLinearElements(
-        this.scene.getSelectedElements(this.state).filter(isLinearElement),
-        isBindingEnabled(this.state),
-        this.state.selectedLinearElement?.selectedPointsIndices ?? [],
+      bindOrUnbindBindingElements(
+        this.scene.getSelectedElements(this.state).filter(isArrowElement),
         this.scene,
-        this.state.zoom,
+        this.state,
       );
 
       const elementsMap = this.scene.getNonDeletedElementsMap();
@@ -6068,7 +6066,7 @@ class App extends React.Component<AppProps, AppState> {
       const { newElement } = this.state;
       if (isBindingElement(newElement, false)) {
         this.setState({
-          suggestedBindings: maybeSuggestBindingsForLinearElementAtCoords(
+          suggestedBindings: maybeSuggestBindingsForBindingElementAtCoords(
             newElement,
             "end",
             this.scene,
@@ -6224,6 +6222,7 @@ class App extends React.Component<AppProps, AppState> {
 
         // If start is bound then snap the fixed binding point if needed
         if (
+          isArrowElement(multiElement) &&
           multiElement.startBinding &&
           multiElement.startBinding.mode === "orbit"
         ) {
@@ -8131,10 +8130,9 @@ class App extends React.Component<AppProps, AppState> {
           );
           const linearElementEditor = {
             ...linearElement,
-            startBindingElement: boundElement,
             pointerDownState: {
               ...linearElement.pointerDownState,
-              arrowOtherPoint: pointFrom<GlobalPoint>(
+              arrowOriginalStartPoint: pointFrom<GlobalPoint>(
                 pointerDownState.origin.x,
                 pointerDownState.origin.y,
               ),
@@ -8156,19 +8154,20 @@ class App extends React.Component<AppProps, AppState> {
         points: [...element.points, pointFrom<LocalPoint>(0, 0)],
       });
       this.scene.insertElement(element);
-      if (isBindingEnabled(this.state) && boundElement) {
-        const hitElement = hitElementItself({
-          element: boundElement,
-          point,
-          elementsMap,
-          threshold: 0,
-        });
-        bindLinearElement(
+      if (isBindingElement(element)) {
+        bindOrUnbindBindingElement(
           element,
-          boundElement,
-          hitElement ? "inside" : "outside",
-          "start",
+          new Map([
+            [
+              0,
+              {
+                point: pointFrom<LocalPoint>(0, 0),
+                isDragging: false,
+              },
+            ],
+          ]),
           this.scene,
+          this.state,
         );
       }
       this.setState((prevState) => {
@@ -8184,7 +8183,7 @@ class App extends React.Component<AppProps, AppState> {
             startBindingElement: boundElement,
             pointerDownState: {
               ...linearElement.pointerDownState,
-              arrowOtherPoint: pointFrom<GlobalPoint>(
+              arrowOriginalStartPoint: pointFrom<GlobalPoint>(
                 pointerDownState.origin.x,
                 pointerDownState.origin.y,
               ),
@@ -8854,7 +8853,7 @@ class App extends React.Component<AppProps, AppState> {
             !isElbowArrow(selectedElements[0])
           ) {
             this.setState({
-              suggestedBindings: getSuggestedBindingsForArrows(
+              suggestedBindings: getSuggestedBindingsForBindingElements(
                 selectedElements,
                 this.scene.getNonDeletedElementsMap(),
                 this.state.zoom,
@@ -9080,8 +9079,6 @@ class App extends React.Component<AppProps, AppState> {
         } else if (isLinearElement(newElement)) {
           pointerDownState.drag.hasOccurred = true;
           const points = newElement.points;
-          const startBindingElement =
-            this.state.editingLinearElement?.startBindingElement;
           let [firstPointX, firstPointY] =
             LinearElementEditor.getPointGlobalCoordinates(
               newElement,
@@ -9106,12 +9103,13 @@ class App extends React.Component<AppProps, AppState> {
               this.scene.getNonDeletedElementsMap(),
               this.state.zoom,
             );
-            const arrowIsInsideTheSameElement =
-              startBindingElement &&
-              startBindingElement !== "keep" &&
-              hoveredElement?.id === startBindingElement.id;
+            const otherBoundElement = startBinding
+              ? elementsMap.get(startBinding.elementId) ?? null
+              : null;
+            const arrowEndpointsAboutToBindToSameElement =
+              startBinding && startBinding.elementId === hoveredElement?.id;
 
-            if (!arrowIsInsideTheSameElement) {
+            if (!arrowEndpointsAboutToBindToSameElement) {
               const [targetPointX, targetPointY] =
                 this.state.bindMode === "focus" && isBindingEnabled(this.state)
                   ? getOutlineAvoidingPoint(
@@ -9126,14 +9124,7 @@ class App extends React.Component<AppProps, AppState> {
                   : pointFrom(gridX, gridY);
 
               // We might need to "jump" and snap the first point of our arrow
-              const otherBoundElement = startBindingElement
-                ? (elementsMap.get(
-                    startBindingElement === "keep"
-                      ? newElement.startBinding!.elementId
-                      : startBindingElement.id,
-                  ) as ExcalidrawBindableElement)
-                : null;
-              if (otherBoundElement) {
+              if (otherBoundElement && isBindableElement(otherBoundElement)) {
                 const [newX, newY] = getOutlineAvoidingPoint(
                   newElement,
                   otherBoundElement,
@@ -9169,6 +9160,20 @@ class App extends React.Component<AppProps, AppState> {
               firstPointY =
                 this.state.editingLinearElement?.pointerDownState
                   .arrowOriginalStartPoint?.[1] ?? firstPointY;
+              if (otherBoundElement && isBindableElement(otherBoundElement)) {
+                startBinding = {
+                  elementId: otherBoundElement.id,
+                  ...calculateFixedPointForNonElbowArrowBinding(
+                    newElement,
+                    otherBoundElement,
+                    "start",
+                    elementsMap,
+                    this.state.editingLinearElement.pointerDownState
+                      .arrowOriginalStartPoint,
+                  ),
+                  mode: "inside",
+                };
+              }
             }
           }
 
@@ -9215,7 +9220,7 @@ class App extends React.Component<AppProps, AppState> {
           if (isBindingElement(newElement, false)) {
             // When creating a linear element by dragging
             this.setState({
-              suggestedBindings: maybeSuggestBindingsForLinearElementAtCoords(
+              suggestedBindings: maybeSuggestBindingsForBindingElementAtCoords(
                 newElement,
                 "end",
                 this.scene,
@@ -10251,15 +10256,9 @@ class App extends React.Component<AppProps, AppState> {
         // the endpoints ("start" or "end").
         const linearElements = this.scene
           .getSelectedElements(this.state)
-          .filter(isLinearElement);
+          .filter(isArrowElement);
 
-        bindOrUnbindLinearElements(
-          linearElements,
-          isBindingEnabled(this.state),
-          this.state.selectedLinearElement?.selectedPointsIndices ?? [],
-          this.scene,
-          this.state.zoom,
-        );
+        bindOrUnbindBindingElements(linearElements, this.scene, this.state);
       }
 
       if (activeTool.type === "laser") {
@@ -11315,7 +11314,7 @@ class App extends React.Component<AppProps, AppState> {
         pointerDownState.resize.center.y,
       )
     ) {
-      const suggestedBindings = getSuggestedBindingsForArrows(
+      const suggestedBindings = getSuggestedBindingsForBindingElements(
         selectedElements,
         this.scene.getNonDeletedElementsMap(),
         this.state.zoom,

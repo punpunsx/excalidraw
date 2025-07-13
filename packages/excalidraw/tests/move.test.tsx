@@ -1,14 +1,11 @@
 import React from "react";
 import { vi } from "vitest";
-
-import { bindOrUnbindLinearElement } from "@excalidraw/element";
-
 import { KEYS, reseed } from "@excalidraw/common";
-
+import { bindBindingElement } from "@excalidraw/element";
 import "@excalidraw/utils/test-utils";
 
 import type {
-  ExcalidrawLinearElement,
+  ExcalidrawArrowElement,
   NonDeleted,
 } from "@excalidraw/element/types";
 
@@ -84,12 +81,18 @@ describe("move element", () => {
     const arrow = UI.createElement("arrow", { x: 110, y: 50, size: 80 });
     act(() => {
       // bind line to two rectangles
-      bindOrUnbindLinearElement(
-        arrow.get() as NonDeleted<ExcalidrawLinearElement>,
+      bindBindingElement(
+        arrow.get() as NonDeleted<ExcalidrawArrowElement>,
         rectA.get(),
         "orbit",
+        "start",
+        h.app.scene,
+      );
+      bindBindingElement(
+        arrow.get() as NonDeleted<ExcalidrawArrowElement>,
         rectB.get(),
         "orbit",
+        "start",
         h.app.scene,
       );
     });

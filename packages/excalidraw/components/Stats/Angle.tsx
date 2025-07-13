@@ -49,7 +49,7 @@ const handleDegreeChange: DragInputCallbackType<AngleProps["property"]> = ({
       scene.mutateElement(latestElement, {
         angle: nextAngle,
       });
-      updateBindings(latestElement, scene, app.state.zoom);
+      updateBindings(latestElement, scene, app.state);
 
       const boundTextElement = getBoundTextElement(latestElement, elementsMap);
       if (boundTextElement && !isArrowElement(latestElement)) {
@@ -75,7 +75,7 @@ const handleDegreeChange: DragInputCallbackType<AngleProps["property"]> = ({
     scene.mutateElement(latestElement, {
       angle: nextAngle,
     });
-    updateBindings(latestElement, scene, app.state.zoom);
+    updateBindings(latestElement, scene, app.state);
 
     const boundTextElement = getBoundTextElement(latestElement, elementsMap);
     if (boundTextElement && !isArrowElement(latestElement)) {

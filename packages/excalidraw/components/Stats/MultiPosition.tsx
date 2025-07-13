@@ -38,7 +38,7 @@ const moveElements = (
   originalElements: readonly ExcalidrawElement[],
   originalElementsMap: ElementsMap,
   scene: Scene,
-  zoom: AppState["zoom"],
+  appState: AppState,
 ) => {
   for (let i = 0; i < originalElements.length; i++) {
     const origElement = originalElements[i];
@@ -64,8 +64,8 @@ const moveElements = (
       newTopLeftY,
       origElement,
       scene,
+      appState,
       originalElementsMap,
-      zoom,
       false,
     );
   }
@@ -77,7 +77,7 @@ const moveGroupTo = (
   originalElements: ExcalidrawElement[],
   originalElementsMap: ElementsMap,
   scene: Scene,
-  zoom: AppState["zoom"],
+  appState: AppState,
 ) => {
   const elementsMap = scene.getNonDeletedElementsMap();
   const [x1, y1, ,] = getCommonBounds(originalElements);
@@ -110,8 +110,8 @@ const moveGroupTo = (
         topLeftY + offsetY,
         origElement,
         scene,
+        appState,
         originalElementsMap,
-        zoom,
         false,
       );
     }
@@ -157,7 +157,7 @@ const handlePositionChange: DragInputCallbackType<
           elementsInUnit.map((el) => el.original),
           originalElementsMap,
           scene,
-          app.state.zoom,
+          app.state,
         );
       } else {
         const origElement = elementsInUnit[0]?.original;
@@ -184,8 +184,8 @@ const handlePositionChange: DragInputCallbackType<
             newTopLeftY,
             origElement,
             scene,
+            app.state,
             originalElementsMap,
-            app.state.zoom,
             false,
           );
         }
@@ -210,7 +210,7 @@ const handlePositionChange: DragInputCallbackType<
     originalElements,
     originalElementsMap,
     scene,
-    app.state.zoom,
+    app.state,
   );
 
   scene.triggerUpdate();

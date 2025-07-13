@@ -29,7 +29,6 @@ import {
   FIXED_BINDING_DISTANCE,
   getHeadingForElbowArrowSnap,
   getGlobalFixedPointForBindableElement,
-  getHoveredElementForBinding,
 } from "./binding";
 import { distanceToElement } from "./distance";
 import {
@@ -50,8 +49,8 @@ import {
   type ExcalidrawElbowArrowElement,
   type NonDeletedSceneElementsMap,
 } from "./types";
-
 import { aabbForElement, pointInsideBounds } from "./bounds";
+import { getHoveredElementForBinding } from "./collision";
 
 import type { Bounds } from "./bounds";
 import type { Heading } from "./heading";

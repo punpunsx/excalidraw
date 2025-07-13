@@ -161,7 +161,7 @@ export const isLinearElementType = (
 export const isBindingElement = (
   element?: ExcalidrawElement | null,
   includeLocked = true,
-): element is ExcalidrawLinearElement => {
+): element is ExcalidrawArrowElement => {
   return (
     element != null &&
     (!element.locked || includeLocked === true) &&

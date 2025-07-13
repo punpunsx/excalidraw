@@ -20,11 +20,11 @@ import {
   getGridPoint,
   invariant,
   tupleToCoors,
-  viewportCoordsToSceneCoords,
 } from "@excalidraw/common";
 
 import {
   deconstructLinearOrFreeDrawElement,
+  getHoveredElementForBinding,
   hitElementItself,
   isPathALoop,
   type Store,
@@ -41,14 +41,10 @@ import type {
   Zoom,
 } from "@excalidraw/excalidraw/types";
 
-import type { Mutable } from "@excalidraw/common/utility-types";
-
 import {
-  bindOrUnbindLinearElement,
-  getHoveredElementForBinding,
   getOutlineAvoidingPoint,
   isBindingEnabled,
-  maybeSuggestBindingsForLinearElementAtCoords,
+  maybeSuggestBindingsForBindingElementAtCoords,
 } from "./binding";
 import {
   getElementAbsoluteCoords,
@@ -141,11 +137,6 @@ export class LinearElementEditor {
   public readonly isDragging: boolean;
   public readonly lastUncommittedPoint: LocalPoint | null;
   public readonly pointerOffset: Readonly<{ x: number; y: number }>;
-  public readonly startBindingElement:
-    | ExcalidrawBindableElement
-    | null
-    | "keep";
-  public readonly endBindingElement: ExcalidrawBindableElement | null | "keep";
   public readonly hoverPointIndex: number;
   public readonly segmentMidPointHoveredCoords: GlobalPoint | null;
   public readonly elbowed: boolean;
@@ -170,8 +161,6 @@ export class LinearElementEditor {
     this.lastUncommittedPoint = null;
     this.isDragging = false;
     this.pointerOffset = { x: 0, y: 0 };
-    this.startBindingElement = "keep";
-    this.endBindingElement = "keep";
     this.pointerDownState = {
       prevSelectedPointsIndices: null,
       lastClickedPoint: -1,
@@ -437,7 +426,7 @@ export class LinearElementEditor {
         }
 
         if (coords.length) {
-          suggestedBindings = maybeSuggestBindingsForLinearElementAtCoords(
+          suggestedBindings = maybeSuggestBindingsForBindingElementAtCoords(
             element,
             firstIndexIsSelected && lastIndexIsSelected
               ? "both"
@@ -500,8 +489,6 @@ export class LinearElementEditor {
     scene: Scene,
   ): LinearElementEditor {
     const elementsMap = scene.getNonDeletedElementsMap();
-    const elements = scene.getNonDeletedElements();
-    const pointerCoords = viewportCoordsToSceneCoords(event, appState);
 
     const { elementId, selectedPointsIndices, isDragging, pointerDownState } =
       editingLinearElement;
@@ -509,15 +496,6 @@ export class LinearElementEditor {
     if (!element) {
       return editingLinearElement;
     }
-
-    const bindings: Mutable<
-      Partial<
-        Pick<
-          InstanceType<typeof LinearElementEditor>,
-          "startBindingElement" | "endBindingElement"
-        >
-      >
-    > = {};
 
     if (isDragging && selectedPointsIndices) {
       for (const selectedPoint of selectedPointsIndices) {
@@ -554,38 +532,12 @@ export class LinearElementEditor {
               ]),
             );
           }
-
-          const propName =
-            selectedPoint === 0 ? "startBindingElement" : "endBindingElement";
-          const otherBinding =
-            element[selectedPoint === 0 ? "endBinding" : "startBinding"];
-          const point =
-            (selectedPointsIndices?.length ?? 0) > 1
-              ? LinearElementEditor.getPointAtIndexGlobalCoordinates(
-                  element,
-                  selectedPoint!,
-                  elementsMap,
-                )
-              : pointFrom<GlobalPoint>(pointerCoords.x, pointerCoords.y);
-          const hoveredElement = getHoveredElementForBinding(
-            point,
-            elements,
-            elementsMap,
-            appState.zoom,
-          );
-
-          bindings[propName] =
-            isBindingEnabled(appState) &&
-            otherBinding?.elementId !== hoveredElement?.id
-              ? hoveredElement
-              : null;
         }
       }
     }
 
     return {
       ...editingLinearElement,
-      ...bindings,
       segmentMidPointHoveredCoords: null,
       hoverPointIndex: -1,
       // if clicking without previously dragging a point(s), and not holding
@@ -858,7 +810,6 @@ export class LinearElementEditor {
   } {
     const appState = app.state;
     const elementsMap = scene.getNonDeletedElementsMap();
-    const elements = scene.getNonDeletedElements();
 
     const ret: ReturnType<typeof LinearElementEditor["handlePointerDown"]> = {
       didAddPoint: false,
@@ -876,6 +827,7 @@ export class LinearElementEditor {
     if (!element) {
       return ret;
     }
+
     const segmentMidpoint = LinearElementEditor.getSegmentMidpointHitCoords(
       linearElementEditor,
       scenePointer,
@@ -883,6 +835,7 @@ export class LinearElementEditor {
       elementsMap,
     );
     let segmentMidpointIndex = null;
+
     if (segmentMidpoint) {
       segmentMidpointIndex = LinearElementEditor.getSegmentMidPointIndex(
         linearElementEditor,
@@ -922,15 +875,10 @@ export class LinearElementEditor {
         },
         selectedPointsIndices: [element.points.length - 1],
         lastUncommittedPoint: null,
-        endBindingElement: getHoveredElementForBinding(
-          pointFrom<GlobalPoint>(scenePointer.x, scenePointer.y),
-          elements,
-          elementsMap,
-          app.state.zoom,
-        ),
       };
 
       ret.didAddPoint = true;
+
       return ret;
     }
 
@@ -945,38 +893,6 @@ export class LinearElementEditor {
     // it would get deselected if the point is outside the hitbox area
     if (clickedPointIndex >= 0 || segmentMidpoint) {
       ret.hitElement = element;
-    } else {
-      // You might be wandering why we are storing the binding elements on
-      // LinearElementEditor and passing them in, instead of calculating them
-      // from the end points of the `linearElement` - this is to allow disabling
-      // binding (which needs to happen at the point the user finishes moving
-      // the point).
-      const allPointSelected =
-        linearElementEditor.pointerDownState.prevSelectedPointsIndices
-          ?.length === element.points.length;
-      const { startBindingElement, endBindingElement } = linearElementEditor;
-      if (
-        !allPointSelected &&
-        isBindingEnabled(appState) &&
-        isBindingElement(element)
-      ) {
-        bindOrUnbindLinearElement(
-          element,
-          startBindingElement === "keep" ? undefined : startBindingElement,
-          startBindingElement === "keep"
-            ? "keep"
-            : app.state.bindMode === "fixed"
-            ? "inside"
-            : "orbit",
-          endBindingElement === "keep" ? undefined : endBindingElement,
-          endBindingElement === "keep"
-            ? "keep"
-            : app.state.bindMode === "fixed"
-            ? "inside"
-            : "orbit",
-          scene,
-        );
-      }
     }
 
     const [x1, y1, x2, y2] = getElementAbsoluteCoords(element, elementsMap);

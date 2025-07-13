@@ -13,7 +13,7 @@ import type {
 
 import type { NonDeletedExcalidrawElement } from "@excalidraw/element/types";
 
-import { bindOrUnbindLinearElement, updateBoundElements } from "./binding";
+import { unbindBindingElement, updateBoundElements } from "./binding";
 import { getCommonBounds } from "./bounds";
 import { getPerfectElementSize } from "./sizeHelpers";
 import { getBoundTextElement } from "./textElement";
@@ -153,14 +153,12 @@ export const dragSelectedElements = (
         // have weird situations, like 0 lenght arrow when the user moves
         // the arrow outside a filled shape suddenly forcing the arrow start
         // and end point to jump "outside" the shape.
-        bindOrUnbindLinearElement(
-          element,
-          shouldUnbindStart ? null : undefined,
-          shouldUnbindStart ? "orbit" : "keep",
-          shouldUnbindEnd ? null : undefined,
-          shouldUnbindEnd ? "orbit" : "keep",
-          scene,
-        );
+        if (shouldUnbindStart) {
+          unbindBindingElement(element, "start", scene);
+        }
+        if (shouldUnbindEnd) {
+          unbindBindingElement(element, "end", scene);
+        }
       }
     }
   });

@@ -132,8 +132,8 @@ const handlePositionChange: DragInputCallbackType<"x" | "y"> = ({
       newTopLeftY,
       origElement,
       scene,
+      app.state,
       originalElementsMap,
-      app.state.zoom,
     );
     return;
   }
@@ -164,8 +164,8 @@ const handlePositionChange: DragInputCallbackType<"x" | "y"> = ({
     newTopLeftY,
     origElement,
     scene,
+    app.state,
     originalElementsMap,
-    app.state.zoom,
   );
 };
 
