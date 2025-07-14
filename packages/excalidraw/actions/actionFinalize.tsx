@@ -276,6 +276,7 @@ export const actionFinalize = register({
             ]),
             scene,
             appState,
+            { newArrow: true },
           );
         }
       }

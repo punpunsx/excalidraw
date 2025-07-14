@@ -11,11 +11,14 @@ import { type AppState } from "@excalidraw/excalidraw/types";
 import { arrayToMap, invariant, throttleRAF } from "@excalidraw/common";
 import { useCallback, useImperativeHandle, useRef } from "react";
 
-import { isArrowElement, isBindableElement } from "@excalidraw/element";
+import {
+  getGlobalFixedPointForBindableElement,
+  isArrowElement,
+  isBindableElement,
+} from "@excalidraw/element";
 
 import {
   isLineSegment,
-  pointFrom,
   type GlobalPoint,
   type LineSegment,
 } from "@excalidraw/math";
@@ -94,9 +97,10 @@ const _renderBinding = (
   const bindable = elementsMap.get(
     binding.elementId,
   ) as ExcalidrawBindableElement;
-  const [x, y] = pointFrom<GlobalPoint>(
-    bindable.x + bindable.width * binding.fixedPoint[0],
-    bindable.y + bindable.height * binding.fixedPoint[1],
+  const [x, y] = getGlobalFixedPointForBindableElement(
+    binding.fixedPoint,
+    bindable,
+    elementsMap,
   );
 
   context.save();
@@ -128,9 +132,10 @@ const _renderBindableBinding = (
   const bindable = elementsMap.get(
     binding.elementId,
   ) as ExcalidrawBindableElement;
-  const [x, y] = pointFrom<GlobalPoint>(
-    bindable.x + bindable.width * binding.fixedPoint[0],
-    bindable.y + bindable.height * binding.fixedPoint[1],
+  const [x, y] = getGlobalFixedPointForBindableElement(
+    binding.fixedPoint,
+    bindable,
+    elementsMap,
   );
 
   context.save();

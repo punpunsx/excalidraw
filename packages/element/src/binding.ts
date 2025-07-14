@@ -125,6 +125,9 @@ export const bindOrUnbindBindingElement = (
   draggingPoints: PointsPositionUpdates,
   scene: Scene,
   appState: AppState,
+  opts?: {
+    newArrow: boolean;
+  },
 ) => {
   const { start, end } = getBindingStrategyForDraggingBindingElementEndpoints(
     arrow,
@@ -132,9 +135,43 @@ export const bindOrUnbindBindingElement = (
     scene.getNonDeletedElementsMap(),
     scene.getNonDeletedElements(),
     appState,
+    opts,
   );
   bindOrUnbindBindingElementEdge(arrow, start, "start", scene);
   bindOrUnbindBindingElementEdge(arrow, end, "end", scene);
+  if (start.focusPoint || end.focusPoint) {
+    // If the strategy dictates a focus point override, then
+    // update the arrow points to point to the focus point.
+    const updates: PointsPositionUpdates = new Map();
+
+    if (start.focusPoint) {
+      updates.set(0, {
+        point:
+          updateBoundPoint(
+            arrow,
+            "startBinding",
+            arrow.startBinding,
+            start.element,
+            scene.getNonDeletedElementsMap(),
+          ) || arrow.points[0],
+      });
+    }
+
+    if (end.focusPoint) {
+      updates.set(arrow.points.length - 1, {
+        point:
+          updateBoundPoint(
+            arrow,
+            "endBinding",
+            arrow.endBinding,
+            end.element,
+            scene.getNonDeletedElementsMap(),
+          ) || arrow.points[arrow.points.length - 1],
+      });
+    }
+
+    LinearElementEditor.movePoints(arrow, scene, updates);
+  }
 };
 
 const bindOrUnbindBindingElementEdge = (
@@ -193,6 +230,9 @@ const bindingStrategyForEndpointDragging = (
   elements: readonly Ordered<NonDeletedExcalidrawElement>[],
   zoom: AppState["zoom"],
   globalBindMode?: AppState["bindMode"],
+  opts?: {
+    newArrow: boolean;
+  },
 ): { current: BindingStrategy; other: BindingStrategy } => {
   let current: BindingStrategy = { mode: undefined };
   let other: BindingStrategy = { mode: undefined };
@@ -233,10 +273,12 @@ const bindingStrategyForEndpointDragging = (
         current = {
           element: hovered,
           mode: "orbit",
-          focusPoint: pointFrom<GlobalPoint>(
-            hovered.x + hovered.width / 2,
-            hovered.y + hovered.height / 2,
-          ),
+          focusPoint: opts?.newArrow
+            ? pointFrom<GlobalPoint>(
+                hovered.x + hovered.width / 2,
+                hovered.y + hovered.height / 2,
+              )
+            : undefined,
         };
 
         return { current, other };
@@ -273,10 +315,12 @@ const bindingStrategyForEndpointDragging = (
         current = {
           element: hovered,
           mode: "orbit",
-          focusPoint: pointFrom<GlobalPoint>(
-            hovered.x + hovered.width / 2,
-            hovered.y + hovered.height / 2,
-          ),
+          focusPoint: opts?.newArrow
+            ? pointFrom<GlobalPoint>(
+                hovered.x + hovered.width / 2,
+                hovered.y + hovered.height / 2,
+              )
+            : undefined,
         };
 
         return { current, other };
@@ -302,6 +346,9 @@ const getBindingStrategyForDraggingBindingElementEndpoints = (
   elementsMap: NonDeletedSceneElementsMap,
   elements: readonly Ordered<NonDeletedExcalidrawElement>[],
   appState: AppState,
+  opts?: {
+    newArrow: boolean;
+  },
 ): { start: BindingStrategy; end: BindingStrategy } => {
   const globalBindMode = appState.bindMode || "focus";
   const startIdx = 0;
@@ -330,7 +377,18 @@ const getBindingStrategyForDraggingBindingElementEndpoints = (
 
     return {
       start: hovered
-        ? { element: hovered, mode: hit ? "inside" : "outside" }
+        ? hit
+          ? { element: hovered, mode: "inside" }
+          : opts?.newArrow
+          ? {
+              element: hovered,
+              mode: "orbit",
+              focusPoint: pointFrom<GlobalPoint>(
+                hovered.x + hovered.width / 2,
+                hovered.y + hovered.height / 2,
+              ),
+            }
+          : { element: hovered, mode: "inside" }
         : { mode: undefined },
       end: { mode: undefined },
     };
@@ -372,6 +430,7 @@ const getBindingStrategyForDraggingBindingElementEndpoints = (
       elements,
       appState.zoom,
       globalBindMode,
+      opts,
     );
 
     return { start: current, end: other };
@@ -393,6 +452,7 @@ const getBindingStrategyForDraggingBindingElementEndpoints = (
       elements,
       appState.zoom,
       globalBindMode,
+      opts,
     );
 
     return { start: other, end: current };
@@ -559,21 +619,6 @@ export const bindBindingElement = (
     });
   }
 };
-
-export const isBindingElementSimpleAndAlreadyBound = (
-  linearElement: NonDeleted<ExcalidrawArrowElement>,
-  alreadyBoundToId: ExcalidrawBindableElement["id"] | undefined,
-  bindableElement: ExcalidrawBindableElement,
-): boolean => {
-  return (
-    alreadyBoundToId === bindableElement.id &&
-    isBindingElementSimple(linearElement)
-  );
-};
-
-const isBindingElementSimple = (
-  linearElement: NonDeleted<ExcalidrawArrowElement>,
-): boolean => linearElement.points.length < 3 && !isElbowArrow(linearElement);
 
 export const unbindBindingElement = (
   arrow: NonDeleted<ExcalidrawArrowElement>,
@@ -1115,7 +1160,7 @@ export const snapToMid = (
 };
 
 export const updateBoundPoint = (
-  linearElement: NonDeleted<ExcalidrawArrowElement>,
+  arrow: NonDeleted<ExcalidrawArrowElement>,
   startOrEnd: "startBinding" | "endBinding",
   binding: FixedPointBinding | null | undefined,
   bindableElement: ExcalidrawBindableElement,
@@ -1124,36 +1169,37 @@ export const updateBoundPoint = (
   if (
     binding == null ||
     // We only need to update the other end if this is a 2 point line element
-    (binding.elementId !== bindableElement.id &&
-      linearElement.points.length > 2)
+    (binding.elementId !== bindableElement.id && arrow.points.length > 2)
   ) {
     return null;
   }
 
   const fixedPoint = normalizeFixedPoint(binding.fixedPoint);
-  const globalMidPoint = elementCenterPoint(bindableElement, elementsMap);
-  const global = pointFrom<GlobalPoint>(
-    bindableElement.x + fixedPoint[0] * bindableElement.width,
-    bindableElement.y + fixedPoint[1] * bindableElement.height,
+  const global = getGlobalFixedPointForBindableElement(
+    fixedPoint,
+    bindableElement,
+    elementsMap,
   );
-  const rotatedGlobal = pointRotateRads(
-    global,
-    globalMidPoint,
-    bindableElement.angle,
-  );
+  const element =
+    arrow.points.length === 1
+      ? {
+          ...arrow,
+          points: [arrow.points[0], arrow.points[0]],
+        }
+      : arrow;
   const maybeOutlineGlobal =
     binding.mode === "orbit"
       ? getOutlineAvoidingPoint(
-          linearElement,
+          element,
           bindableElement,
-          rotatedGlobal,
-          startOrEnd === "startBinding" ? 0 : linearElement.points.length - 1,
+          global,
+          startOrEnd === "startBinding" ? 0 : arrow.points.length - 1,
           elementsMap,
         )
-      : rotatedGlobal;
+      : global;
 
   return LinearElementEditor.pointFromAbsoluteCoords(
-    linearElement,
+    arrow,
     maybeOutlineGlobal,
     elementsMap,
   );
