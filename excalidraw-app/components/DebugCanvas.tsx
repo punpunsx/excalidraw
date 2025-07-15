@@ -188,13 +188,6 @@ const renderBindings = (
       }
 
       if (element.endBinding) {
-        invariant(
-          elementsMap
-            .get(element.endBinding.elementId)
-            ?.boundElements?.find((e) => e.id === element.id),
-          "Missing record in boundElements for arrow",
-        );
-
         _renderBinding(
           context,
           element.endBinding,
@@ -217,17 +210,7 @@ const renderBindings = (
           boundElement.id,
         ) as ExcalidrawArrowElement;
 
-        invariant(
-          arrow,
-          "Arrow element registered as a bound object not found in elementsMap",
-        );
-        invariant(
-          arrow.startBinding?.elementId === element.id ||
-            arrow.endBinding?.elementId === element.id,
-          "Arrow element registered as a bound object not found in binding on the arrow element",
-        );
-
-        if (arrow.startBinding?.elementId === element.id) {
+        if (arrow && arrow.startBinding?.elementId === element.id) {
           _renderBindableBinding(
             arrow.startBinding,
             context,
@@ -238,7 +221,7 @@ const renderBindings = (
             "green",
           );
         }
-        if (arrow.endBinding?.elementId === element.id) {
+        if (arrow && arrow.endBinding?.elementId === element.id) {
           _renderBindableBinding(
             arrow.endBinding,
             context,
