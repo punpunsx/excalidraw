@@ -247,7 +247,7 @@ const bindingStrategyForEndpointDragging = (
 
   // If the global bind mode is in free binding mode, just bind
   // where the pointer is and keep the other end intact
-  if (globalBindMode === "fixed") {
+  if (globalBindMode === "inside") {
     current = hovered
       ? { element: hovered, mode: hit ? "inside" : "outside" }
       : { mode: undefined };

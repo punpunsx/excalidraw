@@ -1720,7 +1720,7 @@ export const actionChangeArrowType = register({
             bindBindingElement(
               newElement,
               startElement,
-              appState.bindMode === "fixed" ? "inside" : "orbit",
+              appState.bindMode === "inside" ? "inside" : "orbit",
               "start",
               app.scene,
             );
@@ -1734,7 +1734,7 @@ export const actionChangeArrowType = register({
             bindBindingElement(
               newElement,
               endElement,
-              appState.bindMode === "fixed" ? "inside" : "orbit",
+              appState.bindMode === "inside" ? "inside" : "orbit",
               "end",
               app.scene,
             );

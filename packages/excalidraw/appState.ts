@@ -124,7 +124,7 @@ export const getDefaultAppState = (): Omit<
     searchMatches: null,
     lockedMultiSelections: {},
     activeLockedId: null,
-    bindMode: "focus",
+    bindMode: "orbit",
   };
 };
 
