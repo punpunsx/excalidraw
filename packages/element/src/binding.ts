@@ -55,6 +55,7 @@ import {
 
 import { aabbForElement, elementCenterPoint } from "./bounds";
 import { updateElbowArrowPoints } from "./elbowArrow";
+import { moveArrowAboveBindable } from "./zindex";
 
 import type { Scene } from "./Scene";
 
@@ -604,6 +605,8 @@ export const bindBindingElement = (
       ),
     };
   }
+
+  moveArrowAboveBindable(arrow, hoveredElement, scene);
 
   scene.mutateElement(arrow, {
     [startOrEnd === "start" ? "startBinding" : "endBinding"]: binding,

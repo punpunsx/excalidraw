@@ -68,7 +68,6 @@ import { ShapeCache, toggleLinePolygonState } from "./shape";
 import { getLockedLinearCursorAlignSize } from "./sizeHelpers";
 
 import { isLineElement } from "./typeChecks";
-import { moveAllRight } from "./zindex";
 
 import type { Scene } from "./Scene";
 
@@ -465,15 +464,6 @@ export class LinearElementEditor {
         isDragging: true,
         customLineAngle,
       };
-
-      // When starting to drag an arrow point, bring the arrow to the front
-      if (isArrowElement(element)) {
-        const updatedElements = moveAllRight(
-          app.scene.getElementsIncludingDeleted(),
-          app.state,
-        );
-        app.scene.replaceAllElements(updatedElements);
-      }
 
       return {
         ...app.state,
