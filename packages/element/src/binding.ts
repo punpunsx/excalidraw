@@ -139,7 +139,7 @@ export const bindOrUnbindBindingElement = (
   );
   bindOrUnbindBindingElementEdge(arrow, start, "start", scene);
   bindOrUnbindBindingElementEdge(arrow, end, "end", scene);
-  if (start.focusPoint || end.focusPoint) {
+  if (!isElbowArrow(arrow) && (start.focusPoint || end.focusPoint)) {
     // If the strategy dictates a focus point override, then
     // update the arrow points to point to the focus point.
     const updates: PointsPositionUpdates = new Map();

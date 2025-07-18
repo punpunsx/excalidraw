@@ -6233,41 +6233,52 @@ class App extends React.Component<AppProps, AppState> {
           multiElement.startBinding.mode === "orbit"
         ) {
           const elementsMap = this.scene.getNonDeletedElementsMap();
-          const startPoint =
-            LinearElementEditor.getPointAtIndexGlobalCoordinates(
-              multiElement,
-              0,
-              elementsMap,
-            );
-          const startElement = this.scene.getElement(
-            multiElement.startBinding.elementId,
-          ) as ExcalidrawBindableElement;
-          const localPoint = updateBoundPoint(
-            multiElement,
-            "startBinding",
-            multiElement.startBinding,
-            startElement,
-            elementsMap,
+          const hoveredElement = getHoveredElementForBinding(
+            pointFrom<GlobalPoint>(scenePointerX, scenePointerY),
+            this.scene.getNonDeletedElements(),
+            this.scene.getNonDeletedElementsMap(),
+            this.state.zoom,
           );
-          const avoidancePoint = localPoint
-            ? LinearElementEditor.getPointGlobalCoordinates(
+          if (
+            !hoveredElement ||
+            hoveredElement.id !== multiElement.startBinding.elementId
+          ) {
+            const startPoint =
+              LinearElementEditor.getPointAtIndexGlobalCoordinates(
                 multiElement,
-                localPoint,
+                0,
                 elementsMap,
-              )
-            : null;
-          if (avoidancePoint && !pointsEqual(startPoint, avoidancePoint)) {
-            const point = LinearElementEditor.pointFromAbsoluteCoords(
+              );
+            const startElement = this.scene.getElement(
+              multiElement.startBinding.elementId,
+            ) as ExcalidrawBindableElement;
+            const localPoint = updateBoundPoint(
               multiElement,
-              avoidancePoint,
+              "startBinding",
+              multiElement.startBinding,
+              startElement,
               elementsMap,
             );
+            const avoidancePoint = localPoint
+              ? LinearElementEditor.getPointGlobalCoordinates(
+                  multiElement,
+                  localPoint,
+                  elementsMap,
+                )
+              : null;
+            if (avoidancePoint && !pointsEqual(startPoint, avoidancePoint)) {
+              const point = LinearElementEditor.pointFromAbsoluteCoords(
+                multiElement,
+                avoidancePoint,
+                elementsMap,
+              );
 
-            LinearElementEditor.movePoints(
-              multiElement,
-              this.scene,
-              new Map([[0, { point }]]),
-            );
+              LinearElementEditor.movePoints(
+                multiElement,
+                this.scene,
+                new Map([[0, { point }]]),
+              );
+            }
           }
         }
 
@@ -6933,9 +6944,13 @@ class App extends React.Component<AppProps, AppState> {
         clearTimeout(this.bindModeHandler);
       }
       this.bindModeHandler = null;
-      this.setState({
-        bindMode: "orbit",
-      });
+      // We need this iteration to complete binding and change
+      // back to orbit mode after that
+      setTimeout(() =>
+        this.setState({
+          bindMode: "orbit",
+        }),
+      );
     }
 
     const scenePointer = viewportCoordsToSceneCoords(
@@ -8494,26 +8509,6 @@ class App extends React.Component<AppProps, AppState> {
         event[KEYS.CTRL_OR_CMD] ? null : this.getEffectiveGridSize(),
       );
 
-      // for arrows/lines, don't start dragging until a given threshold
-      // to ensure we don't create a 2-point arrow by mistake when
-      // user clicks mouse in a way that it moves a tiny bit (thus
-      // triggering pointermove)
-      if (
-        !pointerDownState.drag.hasOccurred &&
-        (this.state.activeTool.type === "arrow" ||
-          this.state.activeTool.type === "line")
-      ) {
-        if (
-          pointDistance(
-            pointFrom(pointerCoords.x, pointerCoords.y),
-            pointFrom(pointerDownState.origin.x, pointerDownState.origin.y),
-          ) *
-            this.state.zoom.value <
-          MINIMUM_ARROW_SIZE
-        ) {
-          return;
-        }
-      }
       if (pointerDownState.resize.isResizing) {
         pointerDownState.lastCoords.x = pointerCoords.x;
         pointerDownState.lastCoords.y = pointerCoords.y;
