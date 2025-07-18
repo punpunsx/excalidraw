@@ -6,6 +6,7 @@ import {
   isArrowElement,
   isValidPolygon,
   LinearElementEditor,
+  moveArrowAboveBindable,
 } from "@excalidraw/element";
 
 import {
@@ -49,6 +50,7 @@ export const actionFinalize = register({
   label: "",
   trackEvent: false,
   perform: (elements, appState, data, app) => {
+    let newElements = elements;
     const { interactiveCanvas, focusContainer, scene } = app;
     const { event, sceneCoords } =
       (data as {
@@ -87,13 +89,22 @@ export const actionFinalize = register({
         app.scene,
       );
 
-      bindOrUnbindBindingElement(element, draggedPoints, scene, appState);
+      const { start, end } = bindOrUnbindBindingElement(
+        element,
+        draggedPoints,
+        scene,
+        appState,
+      );
+      const bindableIds = [];
+      start.element && bindableIds.push(start.element.id);
+      end.element && bindableIds.push(end.element.id);
+      newElements = moveArrowAboveBindable(element, bindableIds, scene);
 
       if (linearElementEditor !== appState.selectedLinearElement) {
         // `handlePointerUp()` updated the linear element instance,
         // so filter out this element if it is too small,
         // but do an update to all new elements anyway for undo/redo purposes.
-        let newElements = elements;
+
         if (element && isInvisiblySmallElement(element)) {
           // TODO: #7348 in theory this gets recorded by the store, so the invisible elements could be restored by the undo/redo, which might be not what we would want
           newElements = newElements.filter((el) => el.id !== element!.id);
@@ -149,7 +160,7 @@ export const actionFinalize = register({
         return {
           elements:
             element.points.length < 2 || isInvisiblySmallElement(element)
-              ? elements.filter((el) => el.id !== element.id)
+              ? newElements.filter((el) => el.id !== element.id)
               : undefined,
           appState: {
             ...appState,
@@ -160,8 +171,6 @@ export const actionFinalize = register({
         };
       }
     }
-
-    let newElements = elements;
 
     if (window.document.activeElement instanceof HTMLElement) {
       focusContainer();
@@ -256,7 +265,7 @@ export const actionFinalize = register({
             : LinearElementEditor.getPointAtIndexGlobalCoordinates(
                 element,
                 -1,
-                arrayToMap(elements),
+                arrayToMap(newElements),
               );
           const point = LinearElementEditor.pointFromAbsoluteCoords(
             element,
