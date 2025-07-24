@@ -6,7 +6,6 @@ import {
   isArrowElement,
   isValidPolygon,
   LinearElementEditor,
-  moveArrowAboveBindable,
 } from "@excalidraw/element";
 
 import {
@@ -98,7 +97,6 @@ export const actionFinalize = register({
       const bindableIds = [];
       start.element && bindableIds.push(start.element.id);
       end.element && bindableIds.push(end.element.id);
-      newElements = moveArrowAboveBindable(element, bindableIds, scene);
 
       if (linearElementEditor !== appState.selectedLinearElement) {
         // `handlePointerUp()` updated the linear element instance,

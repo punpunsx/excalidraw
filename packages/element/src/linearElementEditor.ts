@@ -24,9 +24,11 @@ import {
 
 import {
   bindingBorderTest,
+  CaptureUpdateAction,
   deconstructLinearOrFreeDrawElement,
   getHoveredElementForBinding,
   isPathALoop,
+  moveArrowAboveBindable,
   type Store,
 } from "@excalidraw/element";
 
@@ -55,12 +57,16 @@ import {
 
 import { headingIsHorizontal, vectorToHeading } from "./heading";
 import { mutateElement } from "./mutateElement";
-import { getBoundTextElement, handleBindTextResize } from "./textElement";
 import {
-  isArrowElement,
+  getBoundTextElement,
+  getContainerElement,
+  handleBindTextResize,
+} from "./textElement";
+import {
   isBindingElement,
   isElbowArrow,
   isSimpleArrow,
+  isTextElement,
 } from "./typeChecks";
 
 import { ShapeCache, toggleLinePolygonState } from "./shape";
@@ -383,7 +389,7 @@ export class LinearElementEditor {
             linearElementEditor,
             event[KEYS.CTRL_OR_CMD] ? null : app.getEffectiveGridSize(),
             elements,
-            app.state,
+            app,
           ),
         );
       }
@@ -1930,7 +1936,7 @@ const pointDraggingUpdates = (
   linearElementEditor: LinearElementEditor,
   gridSize: NullableGridSize,
   elements: readonly Ordered<NonDeletedExcalidrawElement>[],
-  appState: AppState,
+  app: AppClassProperties,
 ): PointsPositionUpdates => {
   const [, , , , cx, cy] = getElementAbsoluteCoords(element, elementsMap, true);
   const hasMidPoints =
@@ -1971,7 +1977,7 @@ const pointDraggingUpdates = (
           newGlobalPointPosition,
           elements,
           elementsMap,
-          appState.zoom,
+          app.state.zoom,
         );
         const otherGlobalPoint =
           LinearElementEditor.getPointAtIndexGlobalCoordinates(
@@ -1985,14 +1991,14 @@ const pointDraggingUpdates = (
             hoveredElement,
             otherGlobalPoint,
             elementsMap,
-            appState.zoom,
+            app.state.zoom,
           );
 
         if (
-          isBindingEnabled(appState) &&
-          isArrowElement(element) &&
+          isBindingEnabled(app.state) &&
+          isBindingElement(element, false) &&
           hoveredElement &&
-          appState.bindMode === "orbit" &&
+          app.state.bindMode === "orbit" &&
           !otherPointInsideElement
         ) {
           newGlobalPointPosition = getOutlineAvoidingPoint(
@@ -2011,6 +2017,35 @@ const pointDraggingUpdates = (
           newGlobalPointPosition[1] - linearElementEditor.pointerOffset.y,
           null,
         );
+
+        // Update z-index of the arrow
+        if (
+          isBindingEnabled(app.state) &&
+          isBindingElement(element) &&
+          hoveredElement
+        ) {
+          const boundTextElement = getBoundTextElement(
+            hoveredElement,
+            elementsMap,
+          );
+          const containerElement = isTextElement(hoveredElement)
+            ? getContainerElement(hoveredElement, elementsMap)
+            : null;
+          const newElements = moveArrowAboveBindable(
+            element,
+            [
+              hoveredElement.id,
+              boundTextElement?.id,
+              containerElement?.id,
+            ].filter((id): id is NonDeletedExcalidrawElement["id"] => !!id),
+            app.scene,
+          );
+
+          app.syncActionResult({
+            elements: newElements,
+            captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+          });
+        }
       }
 
       return [
