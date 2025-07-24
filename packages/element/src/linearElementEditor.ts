@@ -9,6 +9,7 @@ import {
   vectorFromPoint,
   curveLength,
   curvePointAtLength,
+  lineSegment,
 } from "@excalidraw/math";
 
 import { getCurvePathOps } from "@excalidraw/utils/shape";
@@ -322,6 +323,8 @@ export class LinearElementEditor {
     const draggingPoint = element.points[lastClickedPoint];
 
     if (selectedPointsIndices && draggingPoint) {
+      const elements = app.scene.getNonDeletedElements();
+
       if (
         shouldRotateWithDiscreteAngle(event) &&
         selectedPointsIndices.length === 1 &&
@@ -336,7 +339,6 @@ export class LinearElementEditor {
             element.points[selectedIndex][1] - referencePoint[1],
             element.points[selectedIndex][0] - referencePoint[0],
           );
-
         const [width, height] = LinearElementEditor._getShiftLockedDelta(
           element,
           elementsMap,
@@ -345,22 +347,32 @@ export class LinearElementEditor {
           event[KEYS.CTRL_OR_CMD] ? null : app.getEffectiveGridSize(),
           customLineAngle,
         );
-
+        const [x, y] = LinearElementEditor.getPointGlobalCoordinates(
+          element,
+          pointFrom<LocalPoint>(
+            width + referencePoint[0],
+            height + referencePoint[1],
+          ),
+          elementsMap,
+        );
         LinearElementEditor.movePoints(
           element,
           app.scene,
-          new Map([
-            [
-              selectedIndex,
-              {
-                point: pointFrom(
-                  width + referencePoint[0],
-                  height + referencePoint[1],
-                ),
-                isDragging: selectedIndex === lastClickedPoint,
-              },
-            ],
-          ]),
+          pointDraggingUpdates(
+            selectedPointsIndices,
+            0,
+            0,
+            elementsMap,
+            lastClickedPoint,
+            element,
+            x,
+            y,
+            linearElementEditor,
+            event[KEYS.CTRL_OR_CMD] ? null : app.getEffectiveGridSize(),
+            elements,
+            app,
+            true,
+          ),
         );
       } else {
         const newDraggingPointPosition = LinearElementEditor.createPointAt(
@@ -372,7 +384,6 @@ export class LinearElementEditor {
         );
         const deltaX = newDraggingPointPosition[0] - draggingPoint[0];
         const deltaY = newDraggingPointPosition[1] - draggingPoint[1];
-        const elements = app.scene.getNonDeletedElements();
 
         LinearElementEditor.movePoints(
           element,
@@ -995,7 +1006,6 @@ export class LinearElementEditor {
 
     if (shouldRotateWithDiscreteAngle(event) && points.length >= 2) {
       const lastCommittedPoint = points[points.length - 2];
-
       const [width, height] = LinearElementEditor._getShiftLockedDelta(
         element,
         elementsMap,
@@ -1937,6 +1947,7 @@ const pointDraggingUpdates = (
   gridSize: NullableGridSize,
   elements: readonly Ordered<NonDeletedExcalidrawElement>[],
   app: AppClassProperties,
+  angleLocked?: boolean,
 ): PointsPositionUpdates => {
   const [, , , , cx, cy] = getElementAbsoluteCoords(element, elementsMap, true);
   const hasMidPoints =
@@ -2001,12 +2012,29 @@ const pointDraggingUpdates = (
           app.state.bindMode === "orbit" &&
           !otherPointInsideElement
         ) {
+          let customIntersector;
+          if (angleLocked) {
+            const adjacentPointIndex =
+              pointIndex === 0 ? 1 : element.points.length - 2;
+            const globalAdjacentPoint =
+              LinearElementEditor.getPointAtIndexGlobalCoordinates(
+                element,
+                adjacentPointIndex,
+                elementsMap,
+              );
+            customIntersector = lineSegment<GlobalPoint>(
+              globalAdjacentPoint,
+              newGlobalPointPosition,
+            );
+          }
+
           newGlobalPointPosition = getOutlineAvoidingPoint(
             element,
             hoveredElement,
             newGlobalPointPosition,
             pointIndex,
             elementsMap,
+            customIntersector,
           );
         }
 

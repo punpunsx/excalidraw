@@ -15,7 +15,7 @@ import {
   PRECISION,
 } from "@excalidraw/math";
 
-import type { LocalPoint, Radians } from "@excalidraw/math";
+import type { LineSegment, LocalPoint, Radians } from "@excalidraw/math";
 
 import type { AppState } from "@excalidraw/excalidraw/types";
 
@@ -839,6 +839,7 @@ export const bindPointToSnapToElementOutline = (
   bindableElement: ExcalidrawBindableElement,
   startOrEnd: "start" | "end",
   elementsMap: ElementsMap,
+  customIntersector?: LineSegment<GlobalPoint>,
 ): GlobalPoint => {
   const aabb = aabbForElement(bindableElement, elementsMap);
   const localP =
@@ -881,16 +882,18 @@ export const bindPointToSnapToElementOutline = (
       isHorizontal ? center[0] : snapPoint[0],
       !isHorizontal ? center[1] : snapPoint[1],
     );
-    const intersector = lineSegment(
-      otherPoint,
-      pointFromVector(
-        vectorScale(
-          vectorNormalize(vectorFromPoint(snapPoint, otherPoint)),
-          Math.max(bindableElement.width, bindableElement.height) * 2,
-        ),
+    const intersector =
+      customIntersector ??
+      lineSegment(
         otherPoint,
-      ),
-    );
+        pointFromVector(
+          vectorScale(
+            vectorNormalize(vectorFromPoint(snapPoint, otherPoint)),
+            Math.max(bindableElement.width, bindableElement.height) * 2,
+          ),
+          otherPoint,
+        ),
+      );
     intersection = intersectElementWithLineSegment(
       bindableElement,
       elementsMap,
@@ -898,9 +901,8 @@ export const bindPointToSnapToElementOutline = (
       FIXED_BINDING_DISTANCE,
     ).sort(pointDistanceSq)[0];
   } else {
-    intersection = intersectElementWithLineSegment(
-      bindableElement,
-      elementsMap,
+    const intersector =
+      customIntersector ??
       lineSegment(
         adjacentPoint,
         pointFromVector(
@@ -911,7 +913,11 @@ export const bindPointToSnapToElementOutline = (
           ),
           adjacentPoint,
         ),
-      ),
+      );
+    intersection = intersectElementWithLineSegment(
+      bindableElement,
+      elementsMap,
+      intersector,
       FIXED_BINDING_DISTANCE,
     ).sort(
       (g, h) =>
@@ -936,6 +942,7 @@ export const getOutlineAvoidingPoint = (
   coords: GlobalPoint,
   pointIndex: number,
   elementsMap: ElementsMap,
+  customIntersector?: LineSegment<GlobalPoint>,
 ): GlobalPoint => {
   if (hoveredElement) {
     const newPoints = Array.from(element.points);
@@ -952,6 +959,7 @@ export const getOutlineAvoidingPoint = (
       hoveredElement,
       pointIndex === 0 ? "start" : "end",
       elementsMap,
+      customIntersector,
     );
   }
 

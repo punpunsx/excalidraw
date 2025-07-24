@@ -17,6 +17,7 @@ import {
   vectorDot,
   vectorNormalize,
   pointsEqual,
+  lineSegment,
 } from "@excalidraw/math";
 
 import {
@@ -6132,11 +6133,29 @@ class App extends React.Component<AppProps, AppState> {
           { informMutation: false, isDragging: false },
         );
       } else {
-        let [gridX, gridY] = getGridPoint(
+        const [lastCommittedX, lastCommittedY] =
+          multiElement?.lastCommittedPoint ?? [0, 0];
+
+        // Handle grid snapping
+        const [gridX, gridY] = getGridPoint(
           scenePointerX,
           scenePointerY,
           event[KEYS.CTRL_OR_CMD] ? null : this.getEffectiveGridSize(),
         );
+        let dxFromLastCommitted = gridX - rx - lastCommittedX;
+        let dyFromLastCommitted = gridY - ry - lastCommittedY;
+
+        if (shouldRotateWithDiscreteAngle(event)) {
+          ({ width: dxFromLastCommitted, height: dyFromLastCommitted } =
+            getLockedLinearCursorAlignSize(
+              // actual coordinate of the last committed point
+              lastCommittedX + rx,
+              lastCommittedY + ry,
+              // cursor-grid coordinate
+              gridX,
+              gridY,
+            ));
+        }
 
         if (
           isArrowElement(multiElement) &&
@@ -6172,36 +6191,29 @@ class App extends React.Component<AppProps, AppState> {
                 pointFrom<GlobalPoint>(scenePointerX, scenePointerY),
                 multiElement.points.length - 1,
                 this.scene.getNonDeletedElementsMap(),
+                shouldRotateWithDiscreteAngle(event)
+                  ? lineSegment<GlobalPoint>(
+                      otherPoint,
+                      pointFrom<GlobalPoint>(
+                        multiElement.x + lastCommittedX + dxFromLastCommitted,
+                        multiElement.y + lastCommittedY + dyFromLastCommitted,
+                      ),
+                    )
+                  : undefined,
               );
-            gridX = avoidancePoint
+            const x = avoidancePoint
               ? avoidancePoint[0]
               : hoveredElement
               ? scenePointerX
               : gridX;
-            gridY = avoidancePoint
+            const y = avoidancePoint
               ? avoidancePoint[1]
               : hoveredElement
               ? scenePointerY
               : gridY;
+            dxFromLastCommitted = x - rx - lastCommittedX;
+            dyFromLastCommitted = y - ry - lastCommittedY;
           }
-        }
-
-        const [lastCommittedX, lastCommittedY] =
-          multiElement?.lastCommittedPoint ?? [0, 0];
-
-        let dxFromLastCommitted = gridX - rx - lastCommittedX;
-        let dyFromLastCommitted = gridY - ry - lastCommittedY;
-
-        if (shouldRotateWithDiscreteAngle(event)) {
-          ({ width: dxFromLastCommitted, height: dyFromLastCommitted } =
-            getLockedLinearCursorAlignSize(
-              // actual coordinate of the last committed point
-              lastCommittedX + rx,
-              lastCommittedY + ry,
-              // cursor-grid coordinate
-              gridX,
-              gridY,
-            ));
         }
 
         if (isPathALoop(points, this.state.zoom.value)) {
@@ -9089,6 +9101,15 @@ class App extends React.Component<AppProps, AppState> {
           let dx = gridX - newElement.x;
           let dy = gridY - newElement.y;
 
+          if (shouldRotateWithDiscreteAngle(event) && points.length === 2) {
+            ({ width: dx, height: dy } = getLockedLinearCursorAlignSize(
+              newElement.x,
+              newElement.y,
+              pointerCoords.x,
+              pointerCoords.y,
+            ));
+          }
+
           if (
             !isElbowArrow(newElement) &&
             this.state.editingLinearElement &&
@@ -9119,6 +9140,20 @@ class App extends React.Component<AppProps, AppState> {
                         : pointFrom(gridX, gridY),
                       newElement.points.length - 1,
                       elementsMap,
+                      shouldRotateWithDiscreteAngle(event) &&
+                        points.length === 2
+                        ? lineSegment(
+                            LinearElementEditor.getPointGlobalCoordinates(
+                              newElement,
+                              points[0],
+                              elementsMap,
+                            ),
+                            pointFrom<GlobalPoint>(
+                              newElement.x + dx,
+                              newElement.y + dy,
+                            ),
+                          )
+                        : undefined,
                     )
                   : pointFrom(gridX, gridY);
 
@@ -9174,15 +9209,6 @@ class App extends React.Component<AppProps, AppState> {
                 };
               }
             }
-          }
-
-          if (shouldRotateWithDiscreteAngle(event) && points.length === 2) {
-            ({ width: dx, height: dy } = getLockedLinearCursorAlignSize(
-              newElement.x,
-              newElement.y,
-              pointerCoords.x,
-              pointerCoords.y,
-            ));
           }
 
           if (points.length === 1) {
